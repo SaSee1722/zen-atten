@@ -82,16 +82,8 @@ export default function StaffAttendance() {
     setAttendance(allPresent);
   };
 
-  const toggleAttendanceStatus = (studentId: string) => {
-    const currentStatus = attendance[studentId] || 'present';
-    const statusCycle: AttendanceStatus[] = ['present', 'absent', 'on-duty', 'unapproved'];
-    const currentIndex = statusCycle.indexOf(currentStatus);
-    const nextIndex = (currentIndex + 1) % statusCycle.length;
-    
-    setAttendance({
-      ...attendance,
-      [studentId]: statusCycle[nextIndex],
-    });
+  const setStudentStatus = (studentId: string, status: AttendanceStatus) => {
+    setAttendance(prev => ({ ...prev, [studentId]: status }));
   };
 
   const handleSubmit = async () => {
@@ -116,18 +108,12 @@ export default function StaffAttendance() {
     }
   };
 
-  const getStatusConfig = (status: AttendanceStatus) => {
-    switch (status) {
-      case 'present':
-        return { color: colors.present, bgColor: colors.presentLight, icon: 'check-circle', label: 'Present' };
-      case 'absent':
-        return { color: colors.absent, bgColor: colors.absentLight, icon: 'cancel', label: 'Absent' };
-      case 'on-duty':
-        return { color: colors.onDuty, bgColor: colors.onDutyLight, icon: 'work', label: 'On-Duty' };
-      case 'unapproved':
-        return { color: colors.unapproved, bgColor: colors.unapprovedLight, icon: 'pending', label: 'Unapproved' };
-    }
-  };
+  const STATUS_OPTIONS: { key: AttendanceStatus; label: string; color: string; bgColor: string; icon: string }[] = [
+    { key: 'present',    label: 'Present',    color: colors.present,    bgColor: colors.presentLight,    icon: 'check-circle' },
+    { key: 'absent',     label: 'Absent',     color: colors.absent,     bgColor: colors.absentLight,     icon: 'cancel' },
+    { key: 'unapproved', label: 'Approved',   color: colors.unapproved, bgColor: colors.unapprovedLight, icon: 'event-available' },
+    { key: 'on-duty',    label: 'On Duty',    color: colors.onDuty,     bgColor: colors.onDutyLight,     icon: 'work' },
+  ];
 
   if (loading) {
     return (
@@ -211,28 +197,49 @@ export default function StaffAttendance() {
             </Text>
 
             {students.map((student) => {
-              const status = attendance[student.id] || 'present';
-              const config = getStatusConfig(status);
+              const currentStatus = attendance[student.id] || 'present';
 
               return (
-                <Pressable
-                  key={student.id}
-                  style={({ pressed }) => [
-                    styles.studentCard,
-                    shadows.sm,
-                    pressed && styles.cardPressed,
-                  ]}
-                  onPress={() => toggleAttendanceStatus(student.id)}
-                >
-                  <View style={styles.studentInfo}>
-                    <Text style={styles.studentName}>{student.name}</Text>
-                    <Text style={styles.studentRoll}>Roll No: {student.rollNo}</Text>
+                <View key={student.id} style={[styles.studentCard, shadows.sm]}>
+                  <View style={styles.studentHeader}>
+                    <View style={styles.studentAvatar}>
+                      <MaterialIcons name="person" size={20} color={colors.staff} />
+                    </View>
+                    <View style={styles.studentInfo}>
+                      <Text style={styles.studentName}>{student.name}</Text>
+                      <Text style={styles.studentRoll}>Roll No: {student.rollNo}</Text>
+                    </View>
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: config.bgColor }]}>
-                    <MaterialIcons name={config.icon as any} size={18} color={config.color} />
-                    <Text style={[styles.statusText, { color: config.color }]}>{config.label}</Text>
+                  <View style={styles.statusButtonRow}>
+                    {STATUS_OPTIONS.map((opt) => {
+                      const isSelected = currentStatus === opt.key;
+                      return (
+                        <Pressable
+                          key={opt.key}
+                          style={[
+                            styles.statusButton,
+                            isSelected
+                              ? { backgroundColor: opt.color, borderColor: opt.color }
+                              : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                          ]}
+                          onPress={() => setStudentStatus(student.id, opt.key)}
+                        >
+                          <MaterialIcons
+                            name={opt.icon as any}
+                            size={14}
+                            color={isSelected ? '#FFFFFF' : colors.textTertiary}
+                          />
+                          <Text style={[
+                            styles.statusButtonText,
+                            { color: isSelected ? '#FFFFFF' : colors.textSecondary },
+                          ]}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
-                </Pressable>
+                </View>
               );
             })}
 
@@ -365,13 +372,24 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   studentCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    padding: spacing.md,
     marginBottom: spacing.sm,
+  },
+  studentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  studentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.staffLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
   },
   studentInfo: {
     flex: 1,
@@ -379,23 +397,30 @@ const styles = StyleSheet.create({
   studentName: {
     ...typography.bodyMedium,
     color: colors.textPrimary,
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   studentRoll: {
     ...typography.caption,
     color: colors.textSecondary,
   },
-  statusBadge: {
+  statusButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  statusButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+    gap: 3,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
   },
-  statusText: {
+  statusButtonText: {
     ...typography.label,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
   },
   submitButton: {
     borderRadius: borderRadius.lg,
