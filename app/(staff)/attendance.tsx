@@ -108,12 +108,18 @@ export default function StaffAttendance() {
     }
   };
 
-  const STATUS_OPTIONS: { key: AttendanceStatus; label: string; color: string; bgColor: string; icon: string }[] = [
-    { key: 'present',    label: 'Present',    color: colors.present,    bgColor: colors.presentLight,    icon: 'check-circle' },
-    { key: 'absent',     label: 'Absent',     color: colors.absent,     bgColor: colors.absentLight,     icon: 'cancel' },
-    { key: 'unapproved', label: 'Approved',   color: colors.unapproved, bgColor: colors.unapprovedLight, icon: 'event-available' },
-    { key: 'on-duty',    label: 'On Duty',    color: colors.onDuty,     bgColor: colors.onDutyLight,     icon: 'work' },
+  const MAIN_OPTIONS = [
+    { key: 'present' as AttendanceStatus,  label: 'Present', color: colors.present, icon: 'check-circle' },
+    { key: 'absent'  as AttendanceStatus,  label: 'Absent',  color: colors.absent,  icon: 'cancel' },
+    { key: 'on-duty' as AttendanceStatus,  label: 'On Duty', color: colors.onDuty,  icon: 'work' },
   ];
+
+  const ABSENT_SUB_OPTIONS = [
+    { key: 'unapproved' as AttendanceStatus, label: 'Unapproved', color: colors.absent,     icon: 'block' },
+    { key: 'absent'     as AttendanceStatus, label: 'Approved',   color: colors.unapproved, icon: 'event-available' },
+  ];
+
+  const isAbsentVariant = (s: AttendanceStatus) => s === 'absent' || s === 'unapproved';
 
   if (loading) {
     return (
@@ -198,6 +204,7 @@ export default function StaffAttendance() {
 
             {students.map((student) => {
               const currentStatus = attendance[student.id] || 'present';
+              const absentActive = isAbsentVariant(currentStatus);
 
               return (
                 <View key={student.id} style={[styles.studentCard, shadows.sm]}>
@@ -210,9 +217,11 @@ export default function StaffAttendance() {
                       <Text style={styles.studentRoll}>Roll No: {student.rollNo}</Text>
                     </View>
                   </View>
+
                   <View style={styles.statusButtonRow}>
-                    {STATUS_OPTIONS.map((opt) => {
-                      const isSelected = currentStatus === opt.key;
+                    {MAIN_OPTIONS.map((opt) => {
+                      const isAbsentBtn = opt.key === 'absent';
+                      const isSelected = isAbsentBtn ? absentActive : currentStatus === opt.key;
                       return (
                         <Pressable
                           key={opt.key}
@@ -222,23 +231,56 @@ export default function StaffAttendance() {
                               ? { backgroundColor: opt.color, borderColor: opt.color }
                               : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
                           ]}
-                          onPress={() => setStudentStatus(student.id, opt.key)}
+                          onPress={() => {
+                            if (isAbsentBtn) {
+                              setStudentStatus(student.id, 'unapproved');
+                            } else {
+                              setStudentStatus(student.id, opt.key);
+                            }
+                          }}
                         >
                           <MaterialIcons
                             name={opt.icon as any}
                             size={14}
                             color={isSelected ? '#FFFFFF' : colors.textTertiary}
                           />
-                          <Text style={[
-                            styles.statusButtonText,
-                            { color: isSelected ? '#FFFFFF' : colors.textSecondary },
-                          ]}>
+                          <Text style={[styles.statusButtonText, { color: isSelected ? '#FFFFFF' : colors.textSecondary }]}>
                             {opt.label}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
+
+                  {absentActive && (
+                    <View style={styles.subOptionRow}>
+                      <MaterialIcons name="subdirectory-arrow-right" size={14} color={colors.textTertiary} style={{ marginRight: 4 }} />
+                      {ABSENT_SUB_OPTIONS.map((sub) => {
+                        const isSelected = currentStatus === sub.key;
+                        return (
+                          <Pressable
+                            key={sub.key}
+                            style={[
+                              styles.subOptionButton,
+                              isSelected
+                                ? { backgroundColor: sub.color, borderColor: sub.color }
+                                : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                            ]}
+                            onPress={() => setStudentStatus(student.id, sub.key)}
+                          >
+                            <MaterialIcons
+                              name={sub.icon as any}
+                              size={13}
+                              color={isSelected ? '#FFFFFF' : colors.textTertiary}
+                            />
+                            <Text style={[styles.subOptionText, { color: isSelected ? '#FFFFFF' : colors.textSecondary }]}>
+                              {sub.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -418,6 +460,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusButtonText: {
+    ...typography.label,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  subOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingLeft: spacing.xs,
+    gap: spacing.xs,
+  },
+  subOptionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 6,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+  },
+  subOptionText: {
     ...typography.label,
     fontSize: 11,
     fontWeight: '600',
