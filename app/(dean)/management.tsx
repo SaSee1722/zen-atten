@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useAlert } from '@/template';
 import { dataService, StaffMember, ClassData } from '../../services/dataService';
@@ -17,6 +18,7 @@ export default function DeanManagement() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
+  const subsRef = useRef<{ unsubscribe: () => void }[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -25,21 +27,7 @@ export default function DeanManagement() {
     advisor: '',
   });
 
-  useEffect(() => {
-    if (!user) return;
-    loadData();
-
-    // Set up real-time subscriptions for staff (profiles) and classes
-    const staffSub = dataService.subscribeToTable('profiles', loadData);
-    const classesSub = dataService.subscribeToTable('classes', loadData);
-
-    return () => {
-      staffSub.unsubscribe();
-      classesSub.unsubscribe();
-    };
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [staffData, classesData] = await Promise.all([
         dataService.getStaffMembers(user?.department),
@@ -52,7 +40,25 @@ export default function DeanManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.department]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      loadData();
+
+      subsRef.current.forEach(s => s.unsubscribe());
+      subsRef.current = [
+        dataService.subscribeToTable('profiles', loadData),
+        dataService.subscribeToTable('classes', loadData),
+      ];
+
+      return () => {
+        subsRef.current.forEach(s => s.unsubscribe());
+        subsRef.current = [];
+      };
+    }, [user, loadData])
+  );
 
   const handleCreateClass = async () => {
     if (!formData.name || !formData.year || !formData.section || !formData.advisor) {

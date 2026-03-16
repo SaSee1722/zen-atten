@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import { dataService } from '../../services/dataService';
 import { StatCard } from '../../components/ui/StatCard';
@@ -14,27 +15,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const subsRef = useRef<{ unsubscribe: () => void }[]>([]);
 
-  useEffect(() => {
-    if (!user) return;
-    
-    loadData();
-
-    // Set up real-time subscriptions
-    const classesSub = dataService.subscribeToTable('classes', loadData);
-    const studentsSub = dataService.subscribeToTable('students', loadData);
-    const staffSub = dataService.subscribeToTable('profiles', loadData);
-    const attendanceSub = dataService.subscribeToTable('attendance_records', loadData);
-
-    return () => {
-      classesSub.unsubscribe();
-      studentsSub.unsubscribe();
-      staffSub.unsubscribe();
-      attendanceSub.unsubscribe();
-    };
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [statsData, activity] = await Promise.all([
         dataService.getStatistics(),
@@ -48,7 +31,27 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      loadData();
+
+      subsRef.current.forEach(s => s.unsubscribe());
+      subsRef.current = [
+        dataService.subscribeToTable('classes', loadData),
+        dataService.subscribeToTable('students', loadData),
+        dataService.subscribeToTable('profiles', loadData),
+        dataService.subscribeToTable('attendance_records', loadData),
+      ];
+
+      return () => {
+        subsRef.current.forEach(s => s.unsubscribe());
+        subsRef.current = [];
+      };
+    }, [user, loadData])
+  );
 
   if (loading) {
     return (

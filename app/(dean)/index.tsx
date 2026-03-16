@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { dataService, ClassData } from '../../services/dataService';
@@ -16,23 +16,9 @@ export default function DeanDashboard() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<ClassData[]>([]);
+  const subsRef = useRef<{ unsubscribe: () => void }[]>([]);
 
-  useEffect(() => {
-    if (!user) return;
-    
-    loadData();
-
-    // Subscribe to classes and students changes for this department
-    const classesSub = dataService.subscribeToTable('classes', loadData);
-    const studentsSub = dataService.subscribeToTable('students', loadData);
-
-    return () => {
-      classesSub.unsubscribe();
-      studentsSub.unsubscribe();
-    };
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const classData = await dataService.getClasses(user?.department);
       setClasses(classData);
@@ -41,7 +27,25 @@ export default function DeanDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.department]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      loadData();
+
+      subsRef.current.forEach(s => s.unsubscribe());
+      subsRef.current = [
+        dataService.subscribeToTable('classes', loadData),
+        dataService.subscribeToTable('students', loadData),
+      ];
+
+      return () => {
+        subsRef.current.forEach(s => s.unsubscribe());
+        subsRef.current = [];
+      };
+    }, [user, loadData])
+  );
 
   const totalStudents = classes.reduce((sum, cls) => sum + cls.studentCount, 0);
 

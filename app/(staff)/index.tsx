@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { dataService, ClassData } from '../../services/dataService';
@@ -16,23 +16,9 @@ export default function StaffDashboard() {
   const [loading, setLoading] = useState(true);
   const [assignedClasses, setAssignedClasses] = useState<ClassData[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const subsRef = useRef<{ unsubscribe: () => void }[]>([]);
 
-  useEffect(() => {
-    if (!user) return;
-    
-    loadData();
-
-    // Subscribe to classes and students changes
-    const classesSub = dataService.subscribeToTable('classes', loadData);
-    const studentsSub = dataService.subscribeToTable('students', loadData);
-
-    return () => {
-      classesSub.unsubscribe();
-      studentsSub.unsubscribe();
-    };
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [allClasses, activity] = await Promise.all([
         dataService.getClasses(),
@@ -49,7 +35,25 @@ export default function StaffDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.name]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      loadData();
+
+      subsRef.current.forEach(s => s.unsubscribe());
+      subsRef.current = [
+        dataService.subscribeToTable('classes', loadData),
+        dataService.subscribeToTable('students', loadData),
+      ];
+
+      return () => {
+        subsRef.current.forEach(s => s.unsubscribe());
+        subsRef.current = [];
+      };
+    }, [user, loadData])
+  );
 
   if (loading) {
     return (
