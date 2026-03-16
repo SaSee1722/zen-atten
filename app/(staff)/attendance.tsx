@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 import { useAlert } from '@/template';
@@ -19,16 +20,13 @@ export default function StaffAttendance() {
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
+  const subsRef = useRef<{ unsubscribe: () => void }[]>([]);
 
-  useEffect(() => {
-    loadClasses();
-  }, []);
-
-  const loadClasses = async () => {
+  const loadClasses = useCallback(async () => {
     try {
       const allClasses = await dataService.getClasses();
       const userClasses = allClasses.filter(
-        cls => user?.assignedClasses?.includes(cls.id)
+        cls => cls.advisor === user?.name
       );
       setAssignedClasses(userClasses);
     } catch (error) {
@@ -36,7 +34,24 @@ export default function StaffAttendance() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.name]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      loadClasses();
+
+      subsRef.current.forEach(s => s.unsubscribe());
+      subsRef.current = [
+        dataService.subscribeToTable('classes', loadClasses),
+      ];
+
+      return () => {
+        subsRef.current.forEach(s => s.unsubscribe());
+        subsRef.current = [];
+      };
+    }, [user, loadClasses])
+  );
 
   const loadStudents = async (classId: string) => {
     try {
